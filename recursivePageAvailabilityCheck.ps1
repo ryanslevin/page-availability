@@ -1,87 +1,100 @@
 Function Check {
 
-	Param($url, $checkedLinks, $filePath, $domain, $category)
+    <#
+    .SYNOPSIS
+        Recursively checks pages of website and saves to csv
+    .DESCRIPTION
+        The Check cmdlet recursively iterates through a website and saves the results of
+        each httpresponse to a csv file. Links that are passed into the cmdlet as a relative
+        reference are updated to the absoloute reference to allow for httpresponse to be returned.
+    .NOTES
+        Version:    1.0
+        Author:     Ryan Slevin
+    #>
+
+
+
+
+	Param($Url, $CheckedLinks, $FilePath, $Domain, $Category)
 
 	try {
 
 		# Request page and assign response to httpResponse
-		$httpResponse = Invoke-WebRequest $url -SessionVariable 'Session' -ErrorAction Stop
+		$HttpResponse = Invoke-WebRequest $Url -SessionVariable 'Session' -ErrorAction Stop
 
         # Assign response code to var
-		$httpResponseStatusCode = $httpResponse.StatusCode
+		$HttpResponseStatusCode = $HttpResponse.StatusCode
 
         # Add url and status code to checked links - this can be converted
         # to an array as it's only tracking one type of value
-		$checkedLinks.Add($url,$httpResponseStatusCode)
+		$CheckedLinks.Add($Url,$HttpResponseStatusCode)
 
         # Save url, status code, error message (blank), and time to custom object and append to csv
         [PSCustomObject]@{
-        Url = $url
-        StatusCode = $httpResponseStatusCode
+        Url = $Url
+        StatusCode = $HttpResponseStatusCode
         Message = ''
         Time = (Get-Date -UFormat "%r").ToString()
-        } | Export-Csv $filePath -notype -Append
+        } | Export-Csv $FilePath -notype -Append
 
-		Write-Output 'Added '$url' to checkedlinks with status code '$httpResponseStatusCode
+		Write-Output 'Added '$Url' to checkedlinks with status code '$HttpResponseStatusCode
 
-		$links = $httpResponse.Links
+		$Links = $HttpResponse.Links
 
 
-		Foreach ($link in $links) {
+		Foreach ($Link in $Links) {
 
-			If ($link.href.Contains("COPM")) {
+			If ($Link.href.Contains("COPM")) {
 
-				# Check if URL starts with sub-category, inserts domain to start if yes.
-				If (($link.href).IndexOf($category)=0) {
-					$href = $link.href
+				# Check if URL starts with category (relative reference), inserts domain to start if yes.
+				If (($Link.href).IndexOf($Category)=0) {
+					$Href = $Link.href
 				}Else {
-					$href = -join($domain,$link.href)
+					$Href = -join($Domain,$Link.href)
 				}
 
                 # Checks if url has already been checked, if not it calls Check-Url and passes in params.
-				If (!$checkedLinks.ContainsKey($href)) {
-					Check $href $checkedLinks $filePath $domain $category
+				If (!$CheckedLinks.ContainsKey($Href)) {
+					Check $Href $CheckedLinks $FilePath $Domain $Category
 				}
 			}
 		}			
 	} catch {
 
 		#Assign error message to errorMessage object
-		$errorMessage = $_.Exception.Message
+		$ErrorMessage = $_.Exception.Message
 			
 		# Print status to console
-		Write-Output $page' is not available. Error Message: '$errorMessage
+		Write-Output $Url' is not available. Error Message: '$ErrorMessage
 
         # Save url, status code, error message, and time to custom object and append to csv.
         # error code not yet pulling from httpResponse object.
         [PSCustomObject]@{
-        Url = $url
+        Url = $Url
         StatusCode = ''
-        Message = $errorMessage
+        Message = $ErrorMessage
         Time = (Get-Date -UFormat "%r").ToString()
-        } | Export-Csv $filePath -notype -Append
+        } | Export-Csv $FilePath -notype -Append
 	}
 }
 
 
 # Open config.ini and assign to config hashtable
-Get-Content "$PSScriptRoot\config.ini" | foreach-object -begin {$config=@{}} -process { $k = [regex]::split($_,'='); if(($k[0].CompareTo("") -ne 0) -and ($k[0].StartsWith("[") -ne $True)) { $config.Add($k[0], $k[1]) } }
+Get-Content "$PSScriptRoot\config.ini" | foreach-object -begin {$Config=@{}} -process { $k = [regex]::split($_,'='); if(($k[0].CompareTo("") -ne 0) -and ($k[0].StartsWith("[") -ne $True)) { $Config.Add($k[0], $k[1]) } }
 
 # Assign config settings from config.ini
-$initialUrl = $config.Get_Item("InitialUrl")
-$domain = $config.Get_Item("Domain")
-$category = $config.Get_Item("category")
+$InitialUrl = $Config.Get_Item("InitialUrl")
+$Domain = $Config.Get_Item("Domain")
+$Category = $Config.Get_Item("category")
 
-
-Write-Output $initialUrl $domain $category
 # Create empty hashtable to house checkedLinks
-$checkedLinks = @{}
+$CheckedLinks = @{}
 
 # Get current date for formatting
-$date = Get-Date -UFormat "%Y-%m-%d--%I-%M"
+$Date = Get-Date -UFormat "%Y-%m-%d--%I-%M"
 
-$dateString = $date.ToString()
+$DateString = $Date.ToString()
 
-$filePath = "$PSScriptRoot\results\page-availability-$dateString.csv"
+$FilePath = "$PSScriptRoot\results\page-availability-$DateString.csv"
 
-Check $initialUrl $checkedLinks $filePath $domain $category
+Check $InitialUrl $CheckedLinks $FilePath $Domain $Category
